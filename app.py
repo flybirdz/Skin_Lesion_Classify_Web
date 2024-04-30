@@ -8,7 +8,7 @@ from models.ecl import ECL_model, balanced_proxies
 import altair as alt
 import pandas as pd
 
-
+# 加载模型，使用缓存，避免每次都要重复加载
 @st.cache_data
 def load_model():
     model = ECL_model(num_classes=7, feat_dim=128)
@@ -18,6 +18,7 @@ def load_model():
     model.eval()
     return model
 
+# 计算代理数
 def get_proxies_num(cls_num_list):
     ratios = [max(np.array(cls_num_list)) / num for num in cls_num_list]
     prototype_num_list = []
@@ -30,13 +31,14 @@ def get_proxies_num(cls_num_list):
     assert len(prototype_num_list) == len(cls_num_list)
     return prototype_num_list
 
+# 预测图像的分类结果，为softmax值
 def predict(image):
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    img = transform(image).unsqueeze(0)
+    ]) # 图像预处理（改变大小，转为tensor，归一化）
+    img = transform(image).unsqueeze(0) # 变为4个通道（batch,channel,width,height）
     output = model(img)
     softmax_output = F.softmax(output, dim=1)
     return softmax_output
@@ -48,6 +50,7 @@ st.warning("识别结果仅供参考，以专业人士意见为准")
 
 uploaded_file = st.file_uploader("上传皮肤图片(.jpg)", type="jpg")
 
+# 上传图片成功后，显示图片，进行预测
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
     st.image(image, caption='Uploaded Image', use_column_width=True)
@@ -64,20 +67,26 @@ if uploaded_file is not None:
 
     data = pd.DataFrame({'Class': ans_list, 'Predicted Probability': output[0].detach().numpy()})
 
+    # 使用Altair创建一个图表对象，指定数据源
     chart = alt.Chart(data).mark_bar().encode(
+        # 设定条形图的x轴为模型预测的概率
         x='Predicted Probability',
+        # 设定条形图的y轴为类别名称
         y='Class',
+        # 设定条形图的颜色，如果条目类别与预测类别相符，则为橙色，否则为钢蓝色
         color=alt.condition(
-            alt.datum.Class == ans,
-            alt.value('orange'), 
-            alt.value('steelblue')
+            alt.datum.Class == ans,  # 判断条件：数据的类别是否为预测类别
+            alt.value('orange'),  # 条件为真时的颜色
+            alt.value('steelblue')  # 条件为假时的颜色
         )
     ).properties(
-        width=500,
-        height=300
+        width=500,  # 图表宽度
+        height=300  # 图表高度
     )
-
+    
+    # 使用Streamlit显示图表
     st.altair_chart(chart)
+
 
 
 graph_img = Image.open("./data/net_graph.png")
